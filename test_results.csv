@@ -1,0 +1,202 @@
+request_id,request_date,cash_balance,inventory_value,response
+1,2025-04-01,45094.7,4905.299999999999,"Thank you for your request! Here is the quote for the requested paper supplies:
+- 200 sheets of A4 glossy paper at $0.05 each, totaling $10.00
+- 100 sheets of heavy cardstock (white) at $0.15 each, totaling $15.00
+- 100 sheets of colored paper (assorted colors) at $0.10 each, totaling $10.00
+
+The total cost for your order amounts to $35.00, and we are pleased to deliver the supplies by April 15, 2025."
+2,2025-04-03,45094.7,4905.299999999999,"Dear Customer,
+
+Thank you for your request for the parade supplies. Unfortunately, we are unable to fulfill your order as we do not provide customers with balloons or streamers. 
+
+We appreciate your understanding, and if you have any other items you would like to inquire about, please feel free to let us know.
+
+Best regards,
+The Supply Team"
+3,2025-04-04,44294.7,5905.299999999999,"Dear Customer,
+
+Thank you for your quote request. Unfortunately, we are unable to fulfill your order as two of the requested items, A3 paper and printer paper, are not provided in our inventory. The only item available is A4 paper, which we can restock before the required delivery date.
+
+Please let us know if you would like to proceed with an order for A4 paper only or if you can consider alternative products.
+
+Best regards,
+[Your Company Name]"
+4,2025-04-05,44234.9,5892.799999999999,"Dear Customer,
+
+Thank you for your order! We have calculated the costs for your request as follows:
+- 500 sheets of high-quality recycled cardstock at $0.15 each, totaling $75.00.
+- 250 sheets of A4 size printer paper at $0.05 each, totaling $12.50.
+
+Thus, the total cost before any potential discounts is $87.50. However, given the size of your order, we have decided to apply a bulk discount, which brings your total to $80.00.
+
+Your order will be delivered by April 15, 2025.
+
+Best regards,
+[Your Company Name]"
+5,2025-04-05,44234.9,5892.799999999999,"Dear Customer,
+
+Thank you for your request for 500 sheets of 8.5""x11"" colored paper, 300 sheets of cardstock in various colors, and 200 rolls of decorative washi tape. We are pleased to inform you that the colored paper and cardstock are available in our inventory. However, we regret to inform you that we do not provide decorative washi tape, which means we are unable to fulfill your entire order at this time.
+
+Please let us know if you would like to proceed with the order for the available items or if you have any further questions or adjustments you'd like to make.
+
+Thank you for your understanding!
+
+Best regards,
+[Your Company Name]"
+6,2025-04-06,44234.9,5892.799999999999,"Dear Customer,
+
+Thank you for your quote request. Unfortunately, we are unable to fulfill your order for 500 sheets of colorful construction paper and 300 sheets of white printer paper, as these items are not provided to customers. However, we do have 200 sheets of cardstock available for your upcoming assembly on April 15, 2025.
+
+If you have any other requests or need assistance with alternative products, please let us know!
+
+Best regards,
+
+[Your Company Name]"
+7,2025-04-07,44234.9,5892.799999999999,"Dear Customer,
+
+Thank you for your request for a large order of various paper supplies for your upcoming exhibition. After reviewing our inventory, we found that we can fulfill most of your request; however, we are unable to provide Matte A3 paper. 
+
+Unfortunately, this means that we cannot proceed with creating a quote for your order at this time. If you would like, we can recommend alternative products or quantities to substitute.
+
+Thank you for your understanding.
+
+Best regards,
+[Your Company]"
+8,2025-04-07,44074.9,6092.8,"Thank you for your order request for the paper supplies for the upcoming ceremony. We are pleased to inform you that the following items are available:
+
+- 500 sheets of A4 glossy paper
+- 1000 sheets of A4 matte paper
+- 2000 sheets of A5 colored paper (this will be restocked before your requested delivery date)
+- 3000 sheets of A4 recycled paper
+
+As the A5 colored paper is currently out of stock, we are working on restocking it, and it will be ready for delivery by April 15, 2025.
+
+If you have any further questions or need assistance, please let us know. Thank you!"
+9,2025-04-07,44097.899999999994,6072.8,"Dear Customer,
+
+Thank you for your order request. Here are the details:
+
+Products Ordered:
+1. 200 sheets of A4 white printer paper
+2. 100 sheets of A3 glossy paper
+3. 50 packets of 100% recycled kraft paper envelopes
+
+The total cost for your order amounts to $35.00, with delivery expected by April 10, 2025.
+
+Please let us know if you need any further assistance.
+
+Best regards,
+[Your Company Name]"
+13,2025-04-08,44097.899999999994,6072.8,"Dear Customer,
+
+Thank you for your order request for 500 sheets of A4 printing paper and 200 sheets of cardstock. Unfortunately, we are unable to fulfill the entire request at this time. While the A4 printing paper is available in our inventory, the cardstock cannot be restocked because it cannot be delivered before your requested date of April 10, 2025.
+
+We apologize for the inconvenience and appreciate your understanding. If you have any other questions or would like to explore alternative products, please let us know.
+
+Best regards,
+[Your Company Name]"
+12,2025-04-08,44097.899999999994,6072.8,"Dear Customer,
+
+Thank you for your recent quote request for 200 sheets of colorful cardstock, 500 sheets of standard printer paper, and 100 paper napkins for your upcoming party on April 15, 2025.
+
+Unfortunately, we were unable to fulfill your request as both the standard printer paper and paper napkins are not available for restock, as we don't provide these items.
+
+We appreciate your understanding and encourage you to check back in the future for alternative products or supplies that may meet your needs.
+
+Best regards,
+[Your Company Name]"
+10,2025-04-08,43866.25,6217.8,"Dear Customer,
+
+Thank you for your order request! We are pleased to provide you with the following quote for your upcoming show:
+
+1. **Products Requested:**
+   - High-quality glossy paper: 500 sheets at $0.20 each, totaling $100.00
+   - Sturdy cardstock: 300 sheets at $0.15 each, totaling $45.00
+   - **Total Cost:** $145.00
+
+2. **Expected Delivery Date:** April 15, 2025.
+
+Your order is confirmed and will be ready for delivery by the mentioned date. If you have any questions or need further assistance, please do not hesitate to reach out.
+
+Thank you for choosing us!
+
+Best regards,
+
+[Your Company Name]"
+11,2025-04-08,43866.5,6102.8,"Dear Customer,
+
+Thank you for your order! You have requested 500 sheets of A3 glossy paper at $0.20 each, totaling $100.00, and 300 sheets of A4 matte paper at $0.05 each, totaling $15.00. Therefore, the total cost of your order is $115.00. The expected delivery date is April 15, 2025.
+
+Best regards,
+Your Company"
+14,2025-04-09,43866.5,6102.8,"Dear Customer,
+
+Thank you for your request for high-quality paper supplies for your upcoming performance. We have successfully checked our inventory for the items you requested. Unfortunately, we are unable to fulfill your order as the poster paper in various colors you requested cannot be restocked in time for your desired delivery date of April 15, 2025.
+
+If you would like to adjust your order or consider alternative options, please let us know.
+
+Thank you for your understanding.
+
+Best regards,
+Your Company"
+15,2025-04-12,43866.5,6102.8,"Dear Customer,
+
+Thank you for your request for a large order of high-quality paper supplies for your upcoming demonstration. Unfortunately, we are unable to fulfill your entire order as we do not provide cardboard for signage.
+
+We can supply you with the following items:
+- 10,000 sheets of A4 white paper
+- 5,000 sheets of A3 colored paper (assorted colors)
+
+Please let us know if you would like to proceed with this portion of your order or if there are any other items you would like us to assist you with.
+
+Thank you for your understanding.
+
+Best regards,
+[Your Company Name]"
+16,2025-04-13,43866.5,6102.8,"Dear Customer,
+
+Thank you for your request for 500 sheets of A4 printer paper, 200 sheets of colorful construction paper, and 100 sheets of poster board to be delivered by April 15, 2025. 
+
+Unfortunately, we cannot fulfill your request for the colorful construction paper as it is not a product we provide. However, your orders for A4 printer paper and poster board are confirmed as available.
+
+If you would like to adjust your order or substitute the colorful construction paper with another product, please let us know.
+
+Thank you for your understanding.
+
+Best regards,
+[Your Company Name]"
+17,2025-04-14,43866.5,6102.8,"Dear Customer,
+
+Thank you for your quote request regarding the paper supplies for your upcoming reception. Unfortunately, we are unable to fulfill your request at this time for the following reasons:
+
+1. **Table Napkins (White)**: Cannot be restocked in time, as they cannot be delivered before April 15, 2025.
+2. **Paper Cups (Biodegradable)**: We do not provide this item.
+
+If you would like to adjust your order or consider alternative products, please let us know, and we will be happy to assist!
+
+Best regards,
+Your Company Name"
+18,2025-04-14,43866.5,6102.8,"Unfortunately, we cannot proceed with your quote request as one of the essential items, standard printing paper, is currently not available and we do not provide this specific product. Please consider selecting an alternative paper option or adjusting your order requirements. We appreciate your understanding!"
+19,2025-04-15,43626.95,5777.8,"Dear Customer,
+
+Thank you for your order! I am pleased to confirm the following:
+
+- 2000 sheets of A4 glossy paper at $0.05 each, totaling $100.
+- 1500 sheets of A3 matte paper at $0.05 each, totaling $75.
+- 1000 sheets of cardstock in assorted colors at $0.15 each, totaling $150.
+
+The overall total for your order is $325. Your supplies are expected to be delivered by April 20, 2025.
+
+Best regards,
+[Manufacturer's Name]"
+20,2025-04-17,43626.95,5777.8,"Dear Customer,
+
+Thank you for your quote request regarding paper supplies for your upcoming concert. We appreciate your interest in our services. 
+
+Unfortunately, we are unable to fulfill your request for flyers, posters, and tickets as we do not provide these specific items. 
+
+We apologize for any inconvenience this may cause and are here to help if you have any other needs or questions.
+
+Best regards,
+
+[Your Company Name]"
