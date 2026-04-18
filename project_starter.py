@@ -4,10 +4,16 @@ import os
 import time
 import dotenv
 import ast
+import traceback
 from sqlalchemy.sql import text
 from datetime import datetime, timedelta
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 from sqlalchemy import create_engine, Engine
+from smolagents import (
+    ToolCallingAgent,
+    OpenAIServerModel,
+    tool,
+)
 
 # Create an SQLite database
 db_engine = create_engine("sqlite:///munder_difflin.db")
@@ -590,22 +596,673 @@ def search_quote_history(search_terms: List[str], limit: int = 5) -> List[Dict]:
 
 
 # Set up and load your env parameters and instantiate your model.
-
+dotenv.load_dotenv(dotenv_path=".env")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+model = OpenAIServerModel(
+    model_id="gpt-4o-mini",
+    api_base="https://openai.vocareum.com/v1" if openai_api_key.startswith("voc") else None,
+    api_key=openai_api_key,
+)
 
 """Set up tools for your agents to use, these should be methods that combine the database functions above
  and apply criteria to them to ensure that the flow of the system is correct."""
 
 
 # Tools for inventory agent
+item_name_to_matching_product_name: Dict[str, str] = {}
 
+@tool
+def find_matching_product_in_inventory(items: List[Dict]) -> List[Dict]:
+    """
+    Find matching products in inventory 
+
+    Args:
+        items (List[Dict]): List of dictionaries representing an item with fields: 
+            - item_name (str): The name of an item
+            - quantity (int): The quantity needed
+            - date_needed (str or datetime): The date when the item is needed in the 'YYYY-MM-DD' format or a datetime object.
+
+    Returns:
+        List[Dict]: List of dictionaries mapping the given item names to the matching product names in inventory
+            - item_name (str): The name of an item
+            - matching_product_name (str): The name of the matching product
+            - found (bool): True if a matching product is found, False otherwise
+    """
+
+    result: List[Dict] = []
+    for item in items:
+        item_name, date_needed = item['item_name'], item['date_needed']
+
+        try:
+            stocks = get_all_inventory(date_needed)
+            words_in_product_names = { product_name: set(product_name.lower().split()) for product_name in stocks }
+            words_in_item_name = set(item_name.lower().split())
+
+            max_number_of_common_words = 0
+            matching_product_name = ""
+            for product_name, words_in_product_name in words_in_product_names.items():
+                common_words = words_in_item_name.intersection(words_in_product_name)
+                if max_number_of_common_words < len(common_words) and \
+                    " ".join(common_words).lower() not in ("", "paper"):
+                    matching_product_name = product_name
+                    max_number_of_common_words = len(common_words)
+                
+            if matching_product_name:
+                result.append({ 
+                    'item_name': item['item_name'],
+                    'matching_product_name': matching_product_name,
+                    'found': True
+                })
+                item_name_to_matching_product_name[item['item_name']] = matching_product_name
+            else:
+                result.append({ 
+                    'item_name': item['item_name'],
+                    'matching_product_name': "",
+                    'found': False
+                })
+        except Exception as e:
+            print(f"Error while looking for a matching product for {item_name}: {str(e)}")
+            print(traceback.format_exc())
+            result.append({ 
+                'item_name': item['item_name'],
+                'matching_product_name': "",
+                'found': False
+            })
+
+    return result
+
+@tool
+def is_available_in_inventory(items: List[Dict]) -> List[Dict]:
+    """
+    Check the availability of items on dates needed
+
+    Args:
+        items (List[Dict]): List of dictionaries representing an item with fields: 
+            - item_name (str): The name of an item
+            - quantity (int): The quantity needed
+            - date_needed (str or datetime): The date when the item is needed in the 'YYYY-MM-DD' format or a datetime object.
+
+    Returns:
+        List[Dict]: A list of dictionaries containing whether the given item is available:
+            - item_name: The name of an item
+            - is_available: True if the item is availabe, False otherwise
+    """
+    
+    result: List[Dict] = []
+    for item in items:
+        if item['item_name'] not in item_name_to_matching_product_name:
+            result.append({
+                    'item_name': item['item_name'],
+                    'is_available': False
+                })
+            continue
+
+        item_name = item['item_name']
+        matching_product_name = item_name_to_matching_product_name[item_name]
+        quantity = item['quantity']
+        date_needed = item['date_needed']
+            
+        try:
+            stock_info = get_stock_level(matching_product_name, date_needed)
+            if (stock_info["item_name"] == matching_product_name).any():
+                stock_level = stock_info.loc[stock_info["item_name"] == matching_product_name, "current_stock"]
+                result.append({
+                    'item_name': item_name,
+                    'is_available': stock_level >= quantity
+                })
+            else:
+                result.append({
+                    'item_name': item_name,
+                    'is_available': False
+                })
+        except Exception as e:
+            print(f"Error while checking if {item_name} is available on {date_needed}: {str(e)}")
+            print(traceback.format_exc())
+            result.append({ 'item_name': item_name, 'is_available': False })
+
+    return result
 
 # Tools for quoting agent
+def find_unit_price(item_name: str) -> float:
+    try:
+        # Find unit_price from the inventory table
+        query = """
+        SELECT
+            item_name,
+            unit_price
+        FROM inventory
+        WHERE item_name = :item_name
+        """
+        result = pd.read_sql(query, db_engine, params={"item_name": item_name})
+        unit_prices = result.loc[result["item_name"] == item_name, "unit_price"]
+        return unit_prices.iloc[0] if not unit_prices.empty else 0.0
+    except Exception as e:
+        print(f"Error while getting the unit price of {item_name}: {str(e)}")
+        print(traceback.format_exc())
+        return 0.0
 
+@tool
+def get_unit_price() -> Dict[str, float]:
+    """
+    Find the unit price of a given item
+
+    Returns:
+        Dict [str, float]: A dictionary containing the mapping of a given item name to the unit price
+            - item_name: unit_price
+    """
+
+    result: Dict[str, float] = {}
+    for item_name, matching_product_name in item_name_to_matching_product_name.items():
+        unit_price = find_unit_price(item_name=matching_product_name)
+        if unit_price > 0: 
+            result[item_name] = unit_price
+    return result
+
+@tool
+def find_historical_quotes_with_discount() -> List[str]:
+    """
+    Retrieve historical quotes with discount
+
+    Returns:
+        List[Dict]: List of dictionaries, each representing a quote with discount with fields:
+            - original_request
+            - total_amount
+            - quote_explanation
+            - job_type
+            - order_size
+            - event_type
+            - order_date
+    """
+    try:
+        search_terms = ["discount"]
+        return search_quote_history(search_terms=search_terms)
+    except Exception as e:
+        print(f"Error while retrieving historical quotes with discount: {str(e)}")
+        print(traceback.format_exc())
+        return []
+
+@tool
+def submit_sale(item_name: str, quantity: int, price: float,date_of_request: Union[str, datetime]) -> str:
+    """
+    Submit a transaction of sale
+
+    Args:
+        item_name (str): The name of an item in the sale
+        quantity (int): The quantity of the item in the sale
+        price (float): The price of the sale
+        date_of_request (str or datetime): The date when the sale is requested in the 'YYYY-MM-DD' format or a datetime object.
+
+    Returns:
+        str: Response with transaction id
+    """
+
+    if item_name not in item_name_to_matching_product_name:
+        return f"Failed to create a transaction of the sale for {item_name} because it does not exist in the system."
+
+    try:
+        transaction_id = create_transaction(item_name=item_name_to_matching_product_name[item_name], 
+                                            transaction_type='sales', 
+                                            quantity=quantity, 
+                                            price=price, 
+                                            date=date_of_request)
+        return f"Created a transaction for the sale of {item_name}: transaction_id={transaction_id}"
+    except Exception as e:
+        print(f"Error creating a transaction for the sale of {item_name}: {str(e)}")
+        print(traceback.format_exc())
+        return f"Failed to create a transaction of the sale for {item_name} due to an error."
 
 # Tools for ordering agent
+def calculate_supplier_price(item_name: str, quantity: int) -> float:
+    # Assume that the item can always be supplied with less price
+    unit_price = find_unit_price(item_name=item_name)
+    return (0.8 * unit_price) * quantity
+    
+@tool
+def can_be_restocked(item_name: str, quantity: int, date_needed: Union[str, datetime], date_of_request: Union[str, datetime]) -> Dict:
+    """
+    Check if a given item can be restocked until the given date
+
+    Args:
+        item_name (str): The name of an item
+        quantity (int): The quantity to restock
+        date_needed (str or datetime): The date when the item is needed in the 'YYYY-MM-DD' format or a datetime object.
+        date_of_request (str or datetime): The date when the request is made in the 'YYYY-MM-DD' format or a datetime object.
+
+    Returns:
+        Dict: A dictionary containing whether the given item can be restocked and the reason
+            - restocked: True if an item can be restocked, False otherwise.
+            - reason: Reason why an item can or cannot be restocked.
+    """
+
+    if item_name not in item_name_to_matching_product_name:
+        return {
+                "restocked": False,
+                "reason": f"We don't provide customers with {item_name}."
+            }
+
+    try:
+        date_needed_str = date_needed.isoformat() if isinstance(date_needed, datetime) else date_needed
+        date_of_request_str = date_of_request.isoformat() if isinstance(date_of_request, datetime) else date_of_request
+
+        supplier_delivery_date_str = get_supplier_delivery_date(input_date_str=date_of_request_str, quantity=quantity)
+        supplier_price = calculate_supplier_price(item_name=item_name_to_matching_product_name[item_name], quantity=quantity)
+        if supplier_price > 0.0:
+            if datetime.fromisoformat(supplier_delivery_date_str) < datetime.fromisoformat(date_needed_str):
+                cash_balance = get_cash_balance(as_of_date=date_of_request_str)
+                if cash_balance > supplier_price:
+                    return { 
+                        "restocked": True,
+                        "reason": f"{item_name} can be restocked before {date_needed_str}."
+                    }
+                else:
+                    return { 
+                        "restocked": False,
+                        "reason": f"{item_name} cannot be restocked because the cash balance is not enough to make the purcahse."
+                    }
+            else:
+                return { 
+                    "restocked": False,
+                    "reason": f"{item_name} cannot be restocked because it cannot be delivered before {date_needed_str}."
+                }
+        else:
+            return {
+                "restocked": False,
+                "reason": f"We don't provide customers with {item_name}."
+            }
+    except Exception as e:
+        print(f"Error while checking if {item_name} can be restocked until {date_needed}: {str(e)}")
+        print(traceback.format_exc())
+        return {
+            "restocked": False,
+            "reason": f"{item_name} cannot be restocked due to a technical issue."
+        }
+
+@tool
+def submit_order(item_name: str, quantity: int, date_of_request: Union[str, datetime]) -> str:
+    """
+    Submit a transaction of order
+
+    Args:
+        item_name (str): The name of an item in the order
+        quantity (int): The quantity of the item in the order
+        date_of_request (str or datetime): The date when the order is submitted
+
+    Returns:
+        str: Response with transaction id
+    """
+
+    if item_name not in item_name_to_matching_product_name:
+        return f"Failed to create a transaction for the order of {item_name} because it does not exist in the system."
+
+    try:
+        supplier_price = calculate_supplier_price(item_name=item_name_to_matching_product_name[item_name], quantity=quantity)
+        if supplier_price > 0.0:
+            transaction_id = create_transaction(item_name=item_name_to_matching_product_name[item_name], 
+                                                transaction_type='stock_orders', 
+                                                quantity=quantity, 
+                                                price=supplier_price, 
+                                                date=date_of_request)
+            return f"Created a transaction for the order of {item_name}: transaction_id={transaction_id}"
+        else:
+            raise ValueError(f"Cannot find the unit price for {item_name}.")
+    except Exception as e:
+        print(f"Error creating a transaction for the order of {item_name}: {str(e)}")
+        print(traceback.format_exc())
+        return f"Failed to create a transaction for the order of {item_name} due to an error."
+
+@tool
+def generate_financial_summary(date_of_request: Union[str, datetime]) -> str:
+    """
+    Generate financial summary to be included in other reports
+
+    Args:
+        date_of_request (str or datetime): The date of financial summary in the 'YYYY-MM-DD' format or a datetime object.
+
+    Returns:
+        str: Formatted financial summary
+    """
+
+    report = generate_financial_report(date_of_request)
+    return f"""
+    Financial Summary
+    DATE: {date_of_request}
+    CASH BALANCE: {report["cash_balance"]}
+    INVENTORY VALUE: {report["inventory_value"]}
+    TOTAL ASSET: {report["total_assets"]}
+    """
 
 
 # Set up your agents and create an orchestration agent that will manage them.
+class InventoryAgent(ToolCallingAgent):
+    def __init__(self, model):
+        super().__init__(
+            tools=[find_matching_product_in_inventory, is_available_in_inventory],
+            model=model,
+            name="inventory_manager",
+            description="""
+            You are an inventory manager responsible for storage and tracking.
+            """
+        )
+
+
+class OrderingAgent(ToolCallingAgent):
+    def __init__(self, model):
+        super().__init__(
+            tools=[can_be_restocked, submit_order],
+            model=model,
+            name="ordering_manager",
+            description="""
+            You are an ordering manager responsible for restocking.
+            """
+        )
+
+
+class QuotingAgent(ToolCallingAgent):
+    def __init__(self, model):
+        super().__init__(
+            tools=[get_unit_price, find_historical_quotes_with_discount, submit_sale],
+            model=model,
+            name="quoting_manager",
+            description="""
+            You are a quoting manager responsible for issuing quotes.
+            """
+        )
+
+
+class AccountingAgent(ToolCallingAgent):
+    def __init__(self, model):
+        super().__init__(
+            tools=[generate_financial_summary],
+            model=model,
+            name="accounting_manager",
+            description="""
+            You are an accounting manager responsible for financial reporting.
+            """
+        )
+
+
+class Orchestrator(ToolCallingAgent):
+    """
+    Orchestrator that coordinates the multi-agent inventory management and quote system.
+    """
+
+    def __init__(self, model):
+        self.model = model
+        
+        self.inventory_agent = InventoryAgent(model=model)
+        self.quoting_agent = QuotingAgent(model=model)
+        self.ordering_agent = OrderingAgent(model=model)
+        self.accounting_agnet = AccountingAgent(model=model)
+        
+        @tool
+        def search_product(items: List[Dict]) -> List[Dict]:
+            """
+            Find any matching product in inventory
+
+            Args:
+                items (List[Dict]): List of dictionaries containing item name, quantity, and request date
+                    - item_name (str): The name of an item
+                    - quantity (int): The quantity needed
+                    - date_needed (str or datetime): The date when the item is needed in the 'YYYY-MM-DD' format or a datetime object.
+    
+            Returns:
+                List[Dict]: List of dictionaries mapping the given item names to the matching product names in inventory
+                    - item_name (str): The name of an item
+                    - matching_product_name (str): The name of the matching product
+                    - found (bool): True if a matching product is found, False otherwise
+            """
+
+            task = f"""
+            Items: {items}
+            
+            Use 'find_matching_product_in_inventory' to find a mathing product per item.
+            """
+            return self.inventory_agent.run(task)
+        
+        @tool
+        def get_items_without_matched_products(items: List[Dict]) -> List:
+            """
+            Find items without matching products in inventory
+
+            Args:
+                items (List[Dict]): List of dictionaries containing item name, quantity, and request date
+                    - item_name (str): The name of an item
+                    - quantity (int): The quantity needed
+                    - date_needed (str or datetime): The date when the item is needed in the 'YYYY-MM-DD' format or a datetime object.
+    
+            Returns:
+                List: item names without matching products
+            """
+
+            return [item['item_name'] for item in items if item['item_name'] not in item_name_to_matching_product_name]
+        
+        @tool
+        def check_inventory(items: List[Dict]) -> List[Dict]:
+            """
+            Check inventory for items
+
+            Args:
+                items (List[Dict]): A list of dictionaries containing item name, quantity, and request date
+                    - item_name (str): The name of an item
+                    - quantity (int): The quantity needed
+                    - date_needed (str or datetime): The date when the item is needed in the 'YYYY-MM-DD' format or a datetime object.
+    
+            Returns:
+                Dict: A list of dictionaries containing whether the given item is available:
+                    - item_name: The name of an item
+                    - is_available: True if the item is availabe, False otherwise
+            """
+
+            task = f"""
+            Items: {items}
+            Matching Products In Inventory: {item_name_to_matching_product_name}
+
+            Use 'is_available_in_inventory' to check the availability of given items on the dates needed.
+            Respond using the following format:
+                [
+                    {{ 'item_name': name1, 'is_available': True or False }},
+                    {{ 'item_name': name2, 'is_available': True or False }},
+                ]
+            """
+            return self.inventory_agent.run(task)
+        
+        @tool
+        def order_item(item_name: str, quantity: int, date_needed: Union[str, datetime], date_of_request: Union[str, datetime]) -> Dict:
+            """
+            Order an item for restock
+
+            Args:
+                item_name (str): The name of an item
+                quantity (int): The quantity of the item
+                date_needed (str or datetime): The date when the item is needed in the 'YYYY-MM-DD' format or a datetime object.
+                date_of_request (str or datetime): The date when the request is made in the 'YYYY-MM-DD' format or a datetime object.
+    
+            Returns:
+                Dict: A dictionary containing whether the item can be restocked
+                    - item_name
+                    - quantity
+                    - date_needed
+                    - date_of_request
+                    - restocked
+                    - reason
+            """
+
+            task = f"""
+            Item: {item_name}
+            Quantity: {quantity}
+            Date Needed: {date_needed}
+            Date Requested: {date_of_request}
+
+            Attempt to restock the matching product for the given item.
+            Use 'can_be_restocked' to check if the matching product can be delivered from a supplier before the date needed.
+                - If yes, use 'submit_order' to purchase the item.
+                - If no, indicate the reason (delivery date or cash balance) in the response.
+            Respond using the format shown below:
+            {{
+                "item_name": Item, 
+                "quantity": Quantity, 
+                "date_needed": Date,
+                "date_of_request": Date, 
+                "restocked": True if the item can be restocked, False otherwise,
+                "reason": reason why the item can or cannot be restocked
+            }}
+            """
+            return self.ordering_agent.run(task)
+        
+        @tool
+        def is_ready_for_quote(stocked_flags: List[str]) -> bool:
+            """
+            Check if ready to create a quote
+
+            Args:
+                stocked_flags (List[str]]): A list of STOCKED/OUT_OF_STOCK flags:
+            
+            Returns:
+                bool: True if all the flags are STOCKED, False otherwise.
+            """
+
+            return all(flag == "STOCKED" for flag in stocked_flags)
+        
+        @tool
+        def create_quote(quote_request: str, date_of_request: Union[str, datetime]) -> Dict:
+            """
+            Issue a quote for the given request
+
+            Args:
+                quote_request (str): Original quote request
+                date_of_request (str or datetime): The date of request
+    
+            Returns:
+                Dict: A dictionary containing quote explanation, total amount, and request metadata:
+                    - quote_explanation (str)
+                    - total_amount (int)
+                    - request_metadata (dict)
+                        - job_type (str)
+                        - order_size (str)
+                        - event_type (str)
+            """
+
+            try:
+                task = f"""
+                Request: {quote_request}
+                Matching Products In Inventory: {item_name_to_matching_product_name}
+                Request Date: {date_of_request}
+
+                For a given quote request, issue a quote following this workflow step-by-step:
+                Step 1. Use 'get_unit_price' with the given matching products information to find the unit prices of the items in the request. Calculate prices of individual items based on the unit prices.
+                Step 2. Use 'find_historical_quotes_with_discount' to find quotes with discount in the past. Determine if the current request is eligible for discount based on the size of the request as well as its similarity with the past quotes with discount.
+                Step 3. Record a transaction per item by using 'submit_sale' with the item name, matching product name, quantity, price, and request date.
+                Step 4. Compose detailed explanation:
+                    - Include all the item names and quantities from request together with prices
+                    - Include the total cost and expected delivery date.
+                    - If a discount is applied, mention it in the explanation. Otherwise, do not mention about a discount.
+                    - This will be used for the main body of the response. Do not include header or closing.
+                    - Do not include any internal information. For example, profit margin or internal system error messages should not appear in the explanation.
+                Respond with the following format:
+                {{
+                    "quote_explanation": "detailed explanation of the quote",
+                    "total_amount": "sum of total prices with discount"
+                    "request_metadata": {{
+                        "job_type": "job title of the quote requester",
+                        "order_size": "one of small, medium, and large",
+                        "event_type": "type of the event in the quote request"
+                    }}
+                }}
+                """
+                return self.quoting_agent.run(task)
+            except Exception as e:
+                print(f"Error while creating a quote: {str(e)}")
+                print(traceback.format_exc())
+                return """
+                Failed to create a quote due to a technical issue"
+                """
+        
+        @tool
+        def generate_summary_report(quote_request: str, quote: Optional[Dict] = None) -> str:
+            """
+            Create a summary report 
+
+            Args:
+                quote_request (str): Original quote request
+                quote (Optional): A dictionary containing quote explanation, total amount, and request metadata:
+                    - quote_explanation (str)
+                    - total_amount (int)
+                    - request_metadata (dict)
+                        - job_type (str)
+                        - order_size (str)
+                        - event_type (str)
+    
+            Returns:
+                str: Summary report
+            """
+
+            task = f"""
+            Request: {quote_request}
+            Quote: {quote or "Not Quoted"}
+
+            Generate a summary report based on the given request and quote. The summary should include:
+                - The name, quantity, and requested date of each product
+                - Whether the request is fulfilled by issuing a quote or not
+                - Use 'get_financial_report_summary' and attach a short finantial report at the end
+                - Do not include any information indentifying the customer
+            """
+            return self.accounting_agnet.run(task)
+
+        super().__init__(
+            tools=[ 
+                search_product,
+                get_items_without_matched_products,
+                check_inventory,
+                order_item,
+                is_ready_for_quote,
+                create_quote,
+                generate_summary_report
+            ],
+            model=model,
+            name="orchestrator",
+            description="""
+            You are the orchestrator of the inventory management and quoting systems.
+            You coordinate between inventory, ordering, and quoting agents.
+            """,
+        )
+
+    def process_quote_request(self, quote_request: str) -> str:
+        """
+        Process a quote request
+        
+        Args:
+            quote_request (str): Original quote request
+            
+        Returns:
+            str: Natural language response with quote details
+        """
+        try:
+            context = f""" 
+            Quote Request: {quote_request}
+
+            Process the above quote request and generate a response to the customer. Follow the procedure below step by step.:
+            Step 1. From the request, identify the products, quantities, and dates needed and requested. Then, use 'search_product' with the identified product names, quantities, and dates needed to store the mapping from the *item name* to the *matching product name* in inventory.
+            Step 2. Determine there are any items without the matching products in inventory by using 'get_items_without_matched_products' with the *item names*, quantities, and date needed.
+                - If there are any, proceed to Step 5.
+                - If not, proceed to Step 3.
+            Step 3. Use 'check_inventory' to check the availability by passing the *item names*, quantities, dates needed.
+                - If a product is available in inventory, flag it as STOCKED.
+                - If not, use 'order_item' with the *item names* to restock. If it can be restocked, flag the product as STOCKED. Otherwise, flag the product as OUT_OF_STOCK
+            Step 4. Use 'is_ready_for_quote' with the list of STOCKED/OUT_OF_STOCK flags collected in Step 3.
+                - If yes, create a quote by using 'create_quote' with the original request and date of request.
+                - If no, proceed to Step 5.
+            Step 5. Generate a succinct response to the customer. Always use a professional and friendly tone in the response for a customer.
+                - If a quote has been created, respond based on the detailed explanation included in the quote.
+                - If a quote couldn't be created, respond with the reason why the request could not be fulfilled.
+            Step 6. Generate a summary report by using 'generate_summary_report' with the request and quote if created.
+            """
+            return self.run(context)
+        except Exception as e:
+            print(f"Error processing quote request: {str(e)}")
+            print(traceback.format_exc())
+            return """
+            Unfortunately we encountered a technical issue while processing your request. Please try again or contact customer service."
+            """
 
 
 # Run your test scenarios by writing them here. Make sure to keep track of them.
@@ -613,7 +1270,7 @@ def search_quote_history(search_terms: List[str], limit: int = 5) -> List[Dict]:
 def run_test_scenarios():
     
     print("Initializing Database...")
-    init_database()
+    init_database(db_engine=db_engine)
     try:
         quote_requests_sample = pd.read_csv("quote_requests_sample.csv")
         quote_requests_sample["request_date"] = pd.to_datetime(
@@ -631,13 +1288,7 @@ def run_test_scenarios():
     current_cash = report["cash_balance"]
     current_inventory = report["inventory_value"]
 
-    ############
-    ############
-    ############
-    # INITIALIZE YOUR MULTI AGENT SYSTEM HERE
-    ############
-    ############
-    ############
+    orchestrator = Orchestrator(model=model)
 
     results = []
     for idx, row in quote_requests_sample.iterrows():
@@ -652,15 +1303,7 @@ def run_test_scenarios():
         # Process request
         request_with_date = f"{row['request']} (Date of request: {request_date})"
 
-        ############
-        ############
-        ############
-        # USE YOUR MULTI AGENT SYSTEM TO HANDLE THE REQUEST
-        ############
-        ############
-        ############
-
-        # response = call_your_multi_agent_system(request_with_date)
+        response = orchestrator.process_quote_request(request_with_date)
 
         # Update state
         report = generate_financial_report(request_date)
